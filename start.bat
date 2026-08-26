@@ -5,6 +5,14 @@ echo =========================================
 
 cd /d "%~dp0backend"
 
+:: Kill existing Python processes to free port 8000
+echo [INFO] Freeing port 8000...
+for /f "tokens=5" %%a in ('netstat -ano ^| findstr ":8000" 2^>nul') do (
+    taskkill /PID %%a /F >nul 2>&1
+)
+taskkill /IM python.exe /F >nul 2>&1
+timeout /t 1 /nobreak >nul
+
 :: Check Python launcher
 py --version >nul 2>&1
 if errorlevel 1 (
