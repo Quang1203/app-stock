@@ -1,0 +1,17 @@
+# Python
+__pycache__/
+*.pyc
+*.pyo
+.pytest_cache/
+
+# Environment / secrets
+.env
+*.env
+.env.*
+
+# Local data
+watchlist.json
+
+# OS
+.DS_Store
+Thumbs.db
