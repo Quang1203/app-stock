@@ -8,5 +8,7 @@
  *   window.APP_CONFIG.BACKEND_URL = 'https://vn-stock-monitor.up.railway.app';
  */
 window.APP_CONFIG = {
-  BACKEND_URL: '',   // e.g. 'https://your-backend.up.railway.app'
+  // BACKEND_URL: '',   // Local: để trống → tự dùng localhost:8000
+  BACKEND_URL: 'app-stock-production-45e5.up.railway.app',   // Local: để trống → tự dùng localhost:8000
+                     // Production: điền Railway URL, ví dụ 'https://xxx.up.railway.app'
 };
