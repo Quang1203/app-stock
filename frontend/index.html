@@ -779,12 +779,13 @@
 // Config – resolve backend URL (dev: localhost, prod: config.js)
 // ═══════════════════════════════════════════════════════════════════════════
 const _cfgUrl = (window.APP_CONFIG && window.APP_CONFIG.BACKEND_URL) || '';
+const _normalizedCfgUrl = _cfgUrl && !/^https?:\/\//i.test(_cfgUrl) ? `https://${_cfgUrl}` : _cfgUrl;
 // file:// protocol or localhost → always use local backend
 const _isLocal = location.protocol === 'file:' ||
                  location.hostname === 'localhost' ||
                  location.hostname === '127.0.0.1' ||
                  location.hostname === '';
-const API_URL = _cfgUrl || (_isLocal ? 'http://localhost:8000' : '');
+const API_URL = _normalizedCfgUrl || (_isLocal ? 'http://localhost:8000' : '');
 const _wsProto = location.protocol === 'https:' ? 'wss' : 'ws';
 const WS_URL   = (API_URL ? API_URL.replace(/^https?/, _wsProto) : `${_wsProto}://${location.host}`) + '/ws';
 

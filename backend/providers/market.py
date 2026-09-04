@@ -110,45 +110,45 @@ class MarketProvider:
                         if item.get("sym")
                     }
                     if parsed:
-                            missing = [sym for sym in symbols if sym not in parsed]
-                            # VPS occasionally returns a partial batch. Refill
-                            # missing symbols instead of replacing a full snapshot
-                            # with one incomplete response.
-                            if missing and len(parsed) < len(symbols) * 0.8:
-                                recovered = await asyncio.gather(
-                                    *(self._get_stock_symbol(sym) for sym in missing),
-                                    return_exceptions=True,
-                                )
-                                for sym, item in zip(missing, recovered):
-                                    if isinstance(item, dict):
-                                        parsed[sym] = item
-                            if len(parsed) >= len(symbols) * 0.8:
-                                self._stock_cache = parsed
-                                return parsed
-                            if self._stock_cache:
-                                return {sym: self._stock_cache[sym] for sym in symbols if sym in self._stock_cache}
+                        missing = [sym for sym in symbols if sym not in parsed]
+                        # VPS occasionally returns a partial batch. Refill
+                        # missing symbols instead of replacing a full snapshot
+                        # with one incomplete response.
+                        if missing and len(parsed) < len(symbols) * 0.8:
+                            recovered = await asyncio.gather(
+                                *(self._get_stock_symbol(sym) for sym in missing),
+                                return_exceptions=True,
+                            )
+                            for sym, item in zip(missing, recovered):
+                                if isinstance(item, dict):
+                                    parsed[sym] = item
+                        if len(parsed) >= len(symbols) * 0.8:
+                            self._stock_cache = parsed
                             return parsed
+                        if self._stock_cache:
+                            return {sym: self._stock_cache[sym] for sym in symbols if sym in self._stock_cache}
+                        return parsed
         except Exception as e:
             logger.warning("VPS fetch error: %s", e)
         # Return stale cache on error so UI stays populated
         return self._stock_cache
 
-        async def _get_stock_symbol(self, symbol: str) -> dict | None:
-            async with _VPS_STOCK_SEM:
-                try:
-                    r = await self._client.get(
-                        f"{_BASE}/getliststockdata/{symbol}",
-                        params={"_": time.time_ns()},
-                    )
-                    if r.status_code == 200:
-                        items = r.json()
-                        if isinstance(items, list):
-                            for item in items:
-                                if item.get("sym") == symbol:
-                                    return _parse_vps(item)
-                except Exception as e:
-                    logger.debug("VPS single-symbol fetch error %s: %s", symbol, e)
-            return None
+    async def _get_stock_symbol(self, symbol: str) -> dict | None:
+        async with _VPS_STOCK_SEM:
+            try:
+                r = await self._client.get(
+                    f"{_BASE}/getliststockdata/{symbol}",
+                    params={"_": time.time_ns()},
+                )
+                if r.status_code == 200:
+                    items = r.json()
+                    if isinstance(items, list):
+                        for item in items:
+                            if item.get("sym") == symbol:
+                                return _parse_vps(item)
+            except Exception as e:
+                logger.debug("VPS single-symbol fetch error %s: %s", symbol, e)
+        return None
 
     async def validate_symbol(self, symbol: str) -> bool:
         """Check if a symbol exists on VPS."""
