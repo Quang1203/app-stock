@@ -31,6 +31,7 @@ logging.basicConfig(
 logger = logging.getLogger("main")
 
 POLL_INTERVAL = 5  # seconds
+VN_TZ = datetime.timezone(datetime.timedelta(hours=7))
 
 provider = MarketProvider()
 engine   = SignalEngine()
@@ -76,12 +77,16 @@ state: dict = {
 connected: list[WebSocket] = []
 
 
+def _now_vn() -> datetime.datetime:
+    return datetime.datetime.now(VN_TZ)
+
+
 # ---------------------------------------------------------------------------
 # Market session helper
 # ---------------------------------------------------------------------------
 
 def _market_status() -> str:
-    now = datetime.datetime.now()
+    now = _now_vn()
     if now.weekday() >= 5:
         return "HOLIDAY"
     h, m = now.hour, now.minute
@@ -207,7 +212,7 @@ async def _poll_loop() -> None:
                 state.update(
                     indices=indices, stocks=processed, signals=top_signals,
                     breadth=breadth, market_status=_market_status(),
-                    last_update=datetime.datetime.now().isoformat(timespec="milliseconds"),
+                    last_update=_now_vn().isoformat(timespec="milliseconds"),
                     watchlist=list(watchlist), strength=top_strength,
                 )
                 await _broadcast({
@@ -275,7 +280,7 @@ async def _refresh_ohlcv_history(symbols: list[str] | None = None) -> None:
             k: v[:-1] for k, v in ohlcv.items()
         }
         updated += 1
-    now = datetime.datetime.now().isoformat(timespec="seconds")
+    now = _now_vn().isoformat(timespec="seconds")
     state["ichimoku_updated"] = now
     logger.info("OHLCV history cached for %d/%d symbols at %s – Ichimoku now recalculates each poll from VPS real-time",
                 updated, len(syms), now)
@@ -407,7 +412,7 @@ async def get_ichimoku_tf(symbol: str, timeframe: str):
     # Hourly / Monthly: fetch from Yahoo (or FireAnt for daily timeframes)
     cache_key = f"{sym}:{tf}"
     cached = _ichi_tf_cache.get(cache_key)
-    if cached and (datetime.datetime.now() - cached["ts"]).seconds < 600:
+    if cached and (_now_vn() - cached["ts"]).seconds < 600:
         return {"symbol": sym, "timeframe": tf, **cached["data"]}
 
     interval, range_ = _TF_CONFIG[tf]
@@ -445,7 +450,7 @@ async def get_ichimoku_tf(symbol: str, timeframe: str):
         if daily_fallback:
             result["note"]      = "daily_proxy"
             result["note_text"] = "Không có dữ liệu theo giờ – hiển thị dữ liệu theo ngày (60 phiên gần nhất)"
-        _ichi_tf_cache[f"{sym}:{tf}"] = {"data": result, "ts": datetime.datetime.now()}
+        _ichi_tf_cache[f"{sym}:{tf}"] = {"data": result, "ts": _now_vn()}
         return {"symbol": sym, "timeframe": tf, **result}
     else:
         ohlcv = await provider.get_ohlcv(sym, interval=interval, range_=range_)
@@ -456,7 +461,7 @@ async def get_ichimoku_tf(symbol: str, timeframe: str):
     if not result:
         raise HTTPException(503, f"Not enough data for Ichimoku [{tf}] ({len(ohlcv.get('close',[]))} bars)")
 
-    _ichi_tf_cache[cache_key] = {"data": result, "ts": datetime.datetime.now()}
+    _ichi_tf_cache[cache_key] = {"data": result, "ts": _now_vn()}
     return {"symbol": sym, "timeframe": tf, **result}
 
 
