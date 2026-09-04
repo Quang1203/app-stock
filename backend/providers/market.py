@@ -8,6 +8,7 @@ Historical OHLCV: FireAnt (primary, if token set) → Yahoo Finance (fallback)
 import asyncio
 import logging
 import os
+import time
 from typing import Optional
 
 import httpx
@@ -45,6 +46,8 @@ _HEADERS = {
         "AppleWebKit/537.36 (KHTML, like Gecko) Chrome/126.0.0.0 Safari/537.36"
     ),
     "Accept": "application/json",
+    "Cache-Control": "no-cache, no-store, max-age=0",
+    "Pragma": "no-cache",
     "Origin": "https://dchart.vps.com.vn",
     "Referer": "https://dchart.vps.com.vn/",
 }
@@ -63,6 +66,7 @@ _YAHOO_SEM = asyncio.Semaphore(5)
 _FIREANT_BASE = "https://restv2.fireant.vn"
 _FIREANT_TOKEN: str = os.environ.get("FIREANT_TOKEN", "")
 _FIREANT_SEM = asyncio.Semaphore(5)
+_VPS_STOCK_SEM = asyncio.Semaphore(10)
 
 
 class MarketProvider:
@@ -91,7 +95,12 @@ class MarketProvider:
             return {}
         query = ",".join(symbols)
         try:
-            r = await self._client.get(f"{_BASE}/getliststockdata/{query}")
+            # The VPS endpoint can otherwise return a CDN snapshot for the
+            # same URL, which makes the realtime table appear frozen.
+            r = await self._client.get(
+                f"{_BASE}/getliststockdata/{query}",
+                params={"_": time.time_ns()},
+            )
             if r.status_code == 200:
                 items = r.json()
                 if items:
@@ -101,12 +110,45 @@ class MarketProvider:
                         if item.get("sym")
                     }
                     if parsed:
-                        self._stock_cache = parsed
-                        return parsed
+                            missing = [sym for sym in symbols if sym not in parsed]
+                            # VPS occasionally returns a partial batch. Refill
+                            # missing symbols instead of replacing a full snapshot
+                            # with one incomplete response.
+                            if missing and len(parsed) < len(symbols) * 0.8:
+                                recovered = await asyncio.gather(
+                                    *(self._get_stock_symbol(sym) for sym in missing),
+                                    return_exceptions=True,
+                                )
+                                for sym, item in zip(missing, recovered):
+                                    if isinstance(item, dict):
+                                        parsed[sym] = item
+                            if len(parsed) >= len(symbols) * 0.8:
+                                self._stock_cache = parsed
+                                return parsed
+                            if self._stock_cache:
+                                return {sym: self._stock_cache[sym] for sym in symbols if sym in self._stock_cache}
+                            return parsed
         except Exception as e:
             logger.warning("VPS fetch error: %s", e)
         # Return stale cache on error so UI stays populated
         return self._stock_cache
+
+        async def _get_stock_symbol(self, symbol: str) -> dict | None:
+            async with _VPS_STOCK_SEM:
+                try:
+                    r = await self._client.get(
+                        f"{_BASE}/getliststockdata/{symbol}",
+                        params={"_": time.time_ns()},
+                    )
+                    if r.status_code == 200:
+                        items = r.json()
+                        if isinstance(items, list):
+                            for item in items:
+                                if item.get("sym") == symbol:
+                                    return _parse_vps(item)
+                except Exception as e:
+                    logger.debug("VPS single-symbol fetch error %s: %s", symbol, e)
+            return None
 
     async def validate_symbol(self, symbol: str) -> bool:
         """Check if a symbol exists on VPS."""

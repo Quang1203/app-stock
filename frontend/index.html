@@ -1037,13 +1037,31 @@ function getTableRows() {
   if (!rows.length) return rows;
 
   const ichiScore = d => (d.ichimoku?.score ?? -1);
+  const hasBullIchiSignal = (d) => (d.ichimoku?.signals || []).some(sig => {
+    const t = String(sig?.type || '');
+    return t.includes('BULL') || t.includes('UP') || t.includes('CONFIRM');
+  });
+  const hasBearIchiSignal = (d) => (d.ichimoku?.signals || []).some(sig => {
+    const t = String(sig?.type || '');
+    return t.includes('BEAR') || t.includes('DOWN') || t.includes('LOST');
+  });
 
   if (activeTab === 'score')
     rows = rows.filter(r => (r.score||0) > 0).sort((a,b)=>(b.score||0)-(a.score||0));
   else if (activeTab === 'ichi-buy')
-    rows = rows.filter(r => ichiScore(r) >= 65).sort((a,b)=>ichiScore(b)-ichiScore(a));
+    rows = rows.filter(r => {
+      const ic = r.ichimoku;
+      if (!ic) return false;
+      if (hasBullIchiSignal(r)) return true;
+      return ichiScore(r) >= 65 || (ic.position === 'above' && ic.tk_signal === 'bullish' && ichiScore(r) >= 50);
+    }).sort((a,b)=>ichiScore(b)-ichiScore(a));
   else if (activeTab === 'ichi-sell')
-    rows = rows.filter(r => ichiScore(r) <= 35 && ichiScore(r) >= 0).sort((a,b)=>ichiScore(a)-ichiScore(b));
+    rows = rows.filter(r => {
+      const ic = r.ichimoku;
+      if (!ic) return false;
+      if (hasBearIchiSignal(r)) return true;
+      return (ichiScore(r) <= 35 && ichiScore(r) >= 0) || (ic.position === 'below' && ic.tk_signal === 'bearish' && ichiScore(r) <= 50);
+    }).sort((a,b)=>ichiScore(a)-ichiScore(b));
   else if (activeTab === 'ichi-above')
     rows = rows.filter(r => r.ichimoku?.position === 'above').sort((a,b)=>ichiScore(b)-ichiScore(a));
   else if (activeTab === 'ichi-below')
@@ -1099,7 +1117,10 @@ function renderTable() {
   const rows = getTableRows();
 
   if (!rows.length) {
-    body.innerHTML = '<tr><td colspan="10"><div class="empty-state"><div class="spinner"></div>Đang tải…</div></td></tr>';
+    const hasStocks = Object.keys(stocks).length > 0;
+    body.innerHTML = hasStocks
+      ? '<tr><td colspan="10"><div class="empty-state">Không có mã phù hợp bộ lọc hiện tại</div></td></tr>'
+      : '<tr><td colspan="10"><div class="empty-state"><div class="spinner"></div>Đang tải…</div></td></tr>';
     return;
   }
 

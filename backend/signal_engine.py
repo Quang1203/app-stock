@@ -123,8 +123,8 @@ class SignalEngine:
         # 3. Buy / Sell pressure vs session baseline
         # ----------------------------------------------------------
         if buy_vol > 0 or ask_vol > 0:
-            state.bid_vol_history.append(buy_vol)
-            state.ask_vol_history.append(ask_vol)
+            state.matched_buy_history.append(buy_vol)
+            state.matched_sell_history.append(ask_vol)
 
         if buy_vol > 0 and ask_vol > 0:
             ratio = buy_vol / ask_vol
@@ -135,8 +135,8 @@ class SignalEngine:
 
             # Compute session-average context for display
             if enough:
-                hist_bid = list(state.bid_vol_history)
-                hist_ask = list(state.ask_vol_history)
+                hist_bid = list(state.matched_buy_history)
+                hist_ask = list(state.matched_sell_history)
                 avg_bid = statistics.mean(hist_bid) or 1
                 avg_ask = statistics.mean(hist_ask) or 1
                 bid_x = buy_vol / avg_bid   # current bid vs session avg bid
